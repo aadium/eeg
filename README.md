@@ -1,0 +1,1 @@
+Dataset: [thejaswinishrinivas/emotions-based-eeg-dataset](https://www.kaggle.com/datasets/thejaswinishrinivas/emotions-based-eeg-dataset)
