@@ -104,7 +104,7 @@ def preprocess_and_train(X, y, model_name):
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
     # Set up callbacks
-    checkpoint = ModelCheckpoint(f'best_{model_name}_model.h5', monitor='val_loss', save_best_only=True, verbose=1)
+    checkpoint = ModelCheckpoint(f'best_{model_name}_model.keras', monitor='val_loss', save_best_only=True, verbose=1)
     early_stop = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
 
     # Train the model
