@@ -19,22 +19,26 @@ def load_data_from_folder(folder_path):
     data = []
     labels = []
     for file_name in os.listdir(folder_path):
-        if file_name.endswith('.csv'):
-            file_path = os.path.join(folder_path, file_name)
-            df = pd.read_csv(file_path, header=None)
-            data.append(df.values)
-            # Create label based on file name
-            if 'Funny' in file_name:
-                label = 0
-            elif 'Scary' in file_name:
-                label = 1
-            elif 'Sad' in file_name:
-                label = 2
-            elif 'Enjoyed' in file_name:
-                label = 3
-            elif 'Relaxed' in file_name:
-                label = 4
-            labels.extend([label] * df.shape[0])
+        if file_name.endswith('_Ch1.csv'):
+            file_path_ch1 = os.path.join(folder_path, file_name)
+            file_path_ch2 = file_path_ch1.replace('_Ch1.csv', '_Ch2.csv')
+            if os.path.exists(file_path_ch2):
+                df_ch1 = pd.read_csv(file_path_ch1, header=None)
+                df_ch2 = pd.read_csv(file_path_ch2, header=None)
+                combined_data = np.stack([df_ch1.values, df_ch2.values], axis=-1)
+                data.append(combined_data)
+                # Create label based on file name
+                if 'Funny' in file_name:
+                    label = 0
+                elif 'Scary' in file_name:
+                    label = 1
+                elif 'Sad' in file_name:
+                    label = 2
+                elif 'Enjoyed' in file_name:
+                    label = 3
+                elif 'Relaxed' in file_name:
+                    label = 4
+                labels.extend([label] * df_ch1.shape[0])
     data = np.concatenate(data, axis=0)
     labels = np.array(labels)
     return data, labels
@@ -58,23 +62,22 @@ def preprocess_and_train(X, y, model_name):
 
     # Standardize the data across time samples (flatten channels, then reshape back)
     scaler = StandardScaler()
-    n_trials, n_timepoints = X_train.shape
+    n_trials, n_timepoints, n_channels = X_train.shape
     X_train_reshaped = X_train.reshape(n_trials, -1)
-    X_train_scaled = scaler.fit_transform(X_train_reshaped).reshape(n_trials, n_timepoints)
+    X_train_scaled = scaler.fit_transform(X_train_reshaped).reshape(n_trials, n_timepoints, n_channels)
     n_trials_test = X_test.shape[0]
-    X_test_scaled = scaler.transform(X_test.reshape(n_trials_test, -1)).reshape(n_trials_test, n_timepoints)
+    X_test_scaled = scaler.transform(X_test.reshape(n_trials_test, -1)).reshape(n_trials_test, n_timepoints, n_channels)
 
-    # Reshape data for EEGNet (assuming 2 channels)
-    n_channels = 2
-    X_train_final = X_train_scaled.reshape(-1, n_timepoints // n_channels, n_channels, 1)
-    X_test_final = X_test_scaled.reshape(-1, n_timepoints // n_channels, n_channels, 1)
+    # Reshape data for EEGNet
+    X_train_final = X_train_scaled.reshape(-1, n_timepoints, n_channels, 1)
+    X_test_final = X_test_scaled.reshape(-1, n_timepoints, n_channels, 1)
 
     # Convert labels to categorical
     y_train_categorical = to_categorical(y_train, num_classes=5)
     y_test_categorical = to_categorical(y_test, num_classes=5)
 
     # Define EEGNet architecture
-    def EEGNet(nb_classes, Chans=2, Samples=n_timepoints // n_channels, dropoutRate=0.5):
+    def EEGNet(nb_classes, Chans=n_channels, Samples=n_timepoints, dropoutRate=0.5):
         input1 = Input(shape=(Samples, Chans, 1))
         
         # First block: Temporal Convolution
@@ -100,19 +103,19 @@ def preprocess_and_train(X, y, model_name):
         return model
 
     # Instantiate EEGNet for multi-class classification (nb_classes=5)
-    model = EEGNet(nb_classes=5, Chans=n_channels, Samples=n_timepoints // n_channels, dropoutRate=0.5)
+    model = EEGNet(nb_classes=5, Chans=n_channels, Samples=n_timepoints, dropoutRate=0.5)
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
     # Set up callbacks
-    checkpoint = ModelCheckpoint(f'best_{model_name}_model.keras', monitor='val_loss', save_best_only=True, verbose=1)
+    checkpoint = ModelCheckpoint(f'best_{model_name}_categorized_model.keras', monitor='val_loss', save_best_only=True, verbose=1)
     early_stop = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
 
     # Train the model
-    model.fit(X_train_final, y_train_categorical, epochs=20, batch_size=16, validation_split=0.2,
+    model.fit(X_train_final, y_train_categorical, epochs=10, batch_size=32, validation_split=0.2,
               callbacks=[checkpoint, early_stop])
 
     # Load the best model weights
-    model.load_weights(f'best_{model_name}_model.keras')
+    model.load_weights(f'best_{model_name}_categorized_model.keras')
 
     # Evaluate on test set
     loss, accuracy = model.evaluate(X_test_final, y_test_categorical)
@@ -128,4 +131,4 @@ def preprocess_and_train(X, y, model_name):
 
 # Preprocess and train models for ads and songs data separately
 preprocess_and_train(ads_data, ads_labels, 'ads')
-preprocess_and_train(songs_data, songs_labels, 'songs')
+#preprocess_and_train(songs_data, songs_labels, 'songs')
